@@ -70,8 +70,8 @@ nvcc --version
 ベース環境を汚さないよう、専用環境を作成します（conda の例）。
 
 ```bash
-conda create -n weather-ft python=3.11 -y
-conda activate weather-ft
+conda create -n weather-ft-cuda python=3.11 -y
+conda activate weather-ft-cuda
 ```
 
 > venv を使う場合:
@@ -81,30 +81,82 @@ conda activate weather-ft
 >
 > Python は 3.11 を推奨（ライブラリ対応が安定しているため）。3.12 でも動作する可能性はありますが未検証です。
 
+> [!IMPORTANT]
+> 一度でも `llama.cpp` の変換 venv を作るときに、既存の `weather-ft` / `weather-ft-cuda` 環境の `transformers` や `torch` を書き換えると、
+> 学習環境が壊れることがあります。**学習環境と GGUF 変換環境は分離して管理**してください。
+
 ---
 
 ## 4. ライブラリのインストール
 
 > [!NOTE]
-> CUDA のバージョン（例: `cu124`）は、お使いの GPU ドライバ・環境に合わせて
-> [PyTorch 公式サイト](https://pytorch.org/get-started/locally/) で確認してください。
-> 以下のバージョン指定は暫定値です。
+> このリポジトリで検証済みのバージョンを固定しています。GPU と driver に合わせて CUDA の値だけを調整してください。
 
 ```bash
-# PyTorch（CUDA バージョンは環境に合わせる。下は CUDA 12.4 の例）
-pip install torch --index-url https://download.pytorch.org/whl/cu124
+# PyTorch（CUDA 12.4 の例。4060 Ti で検証済み）
+python -m pip install \
+  --index-url https://download.pytorch.org/whl/cu124 \
+  --extra-index-url https://pypi.org/simple \
+  torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0
 
-# ファインチューニング一式
-pip install "transformers>=4.44" "trl>=0.9" "peft>=0.12" \
-            "accelerate>=0.33" "datasets>=2.20" "bitsandbytes>=0.43" \
-            sentencepiece
+# ファインチューニング一式（検証済みバージョン固定）
+python -m pip install \
+  transformers==5.22.1 trl==1.17.1 peft==0.21.2 \
+  bitsandbytes==0.50.2 datasets==5.1.0 huggingface_hub==2.4.0 \
+  accelerate sentencepiece ninja
 ```
 
 インストール後、GPU が認識されているか確認:
 
 ```bash
-python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+python - <<'PY'
+import torch
+print(torch.__version__)
+print(torch.version.cuda)
+print(torch.cuda.is_available())
+print(torch.cuda.device_count())
+print(torch.cuda.get_device_name(0))
+PY
 ```
+
+実測の成功例:
+
+```text
+torch= 2.6.0+cu124
+cuda= 12.4
+cuda available= True
+device count= 2
+device name= NVIDIA GeForce RTX 4060 Ti
+```
+
+---
+
+## 4.1. GGUF 変換用の分離環境
+
+`llama.cpp` の変換は学習環境とは別に管理してください。変換用環境で `transformers` を変えると、
+Gemma4 の tokenizer と学習環境の互換性が崩れて、次のような失敗に繋がります。
+
+- `transformers` が旧版で `extra_special_tokens` を読めない
+- `Gemma4` の tokenizer が正しく読み込めない
+- `gguf` 変換が動かない
+- 既存の学習環境が破壊される
+
+推奨構成:
+
+```bash
+python3 -m venv ~/.venv-ggufconvert
+source ~/.venv-ggufconvert/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -U \
+  -r /path/to/llama.cpp/requirements/requirements-convert_hf_to_gguf.txt \
+  "transformers==5.22.1"
+```
+
+**原則**: 学習用環境の `transformers` と GGUF 変換用環境の `transformers` は別物として扱うこと。
+
+---
+
+## 5. Hugging Face の準備（Gemma 利用に必須）
 
 ---
 

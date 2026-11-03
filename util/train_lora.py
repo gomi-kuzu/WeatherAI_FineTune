@@ -18,11 +18,12 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 
 import torch
 from datasets import load_dataset
 from peft import LoraConfig
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainerCallback
 from trl import SFTConfig, SFTTrainer
 
 # テキストデコーダ（language_model）配下の線形層のみを LoRA 対象にする正規表現。
@@ -31,6 +32,61 @@ TEXT_TARGET_MODULES = (
     r"model\.language_model\.layers\.\d+\."
     r"(self_attn\.(q_proj|k_proj|v_proj|o_proj)|mlp\.(gate_proj|up_proj|down_proj))"
 )
+
+
+class GPUProgressCallback(TrainerCallback):
+    """学習中の進捗と GPU メモリ使用量を表示する。"""
+
+    def __init__(self, log_every: int = 5) -> None:
+        self.log_every = log_every
+
+    def _gpu_status(self) -> str:
+        try:
+            out = subprocess.check_output(
+                [
+                    "nvidia-smi",
+                    "--query-gpu=index,utilization.gpu,memory.used,memory.total",
+                    "--format=csv,noheader,nounits",
+                ],
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+            rows = []
+            for line in out.strip().splitlines():
+                if not line.strip():
+                    continue
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) >= 4:
+                    idx, util, used, total = parts[:4]
+                    rows.append(f"GPU{idx}: util={util}% mem={used}/{total}MiB")
+            return "; ".join(rows) if rows else "GPU status unavailable"
+        except Exception:
+            return "GPU status unavailable"
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if state.global_step and state.global_step % self.log_every == 0:
+            print(
+                f"[progress] step={state.global_step}/{state.max_steps or 'NA'} "
+                f"lr={state.log_history[-1].get('learning_rate', 'N/A') if state.log_history else 'N/A'} "
+                f"| {self._gpu_status()}"
+            )
+
+
+def detect_gpu_mem_mb() -> int | None:
+    try:
+        out = subprocess.check_output(
+            [
+                "nvidia-smi",
+                "--query-gpu=memory.total",
+                "--format=csv,noheader,nounits",
+            ],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        vals = [int(line.strip()) for line in out.splitlines() if line.strip()]
+        return min(vals) if vals else None
+    except Exception:
+        return None
 
 
 def parse_args() -> argparse.Namespace:
@@ -60,6 +116,10 @@ def parse_args() -> argparse.Namespace:
         "（batch_size=1, grad_accum=16, max_length=896）。実効バッチは維持。",
     )
     args = p.parse_args()
+    gpu_total_mb = detect_gpu_mem_mb()
+    if gpu_total_mb is not None and gpu_total_mb <= 8192 and not args.low_vram:
+        print(f"[info] 8GB GPU detected (total={gpu_total_mb}MiB). Enabling low-vram mode by default.")
+        args.low_vram = True
     if args.low_vram:
         args.batch_size = 1
         args.grad_accum = 16
@@ -79,8 +139,9 @@ def to_prompt_completion(example: dict) -> dict:
     return {"prompt": prompt, "completion": completion}
 
 
-def main() -> None:
-    args = parse_args()
+def main(args: argparse.Namespace | None = None) -> None:
+    if args is None:
+        args = parse_args()
 
     if not torch.cuda.is_available():
         raise SystemExit("CUDA GPU が見つかりません。GPU 環境で実行してください。")
@@ -157,6 +218,7 @@ def main() -> None:
         eval_dataset=ds["eval"],
         processing_class=tokenizer,
         peft_config=lora_config,
+        callbacks=[GPUProgressCallback(log_every=5)],
     )
 
     trainer.train()
@@ -167,4 +229,13 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    print("[config] model=", args.model)
+    print("[config] output_dir=", args.output_dir)
+    print("[config] epochs=", args.epochs)
+    print("[config] max_length=", args.max_length)
+    print("[config] batch_size=", args.batch_size)
+    print("[config] grad_accum=", args.grad_accum)
+    print("[config] low_vram=", args.low_vram)
+    print("[config] GPU_total_mb=", detect_gpu_mem_mb())
+    main(args)

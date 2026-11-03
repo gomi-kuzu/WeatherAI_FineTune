@@ -1,7 +1,103 @@
 # オフライン気象予測LLMの追加学習
 
-山中でネット接続なしに使う軽量LLM向けの、降水量ベースの荒天リスク学習データ。
-Hugging Face Transformers・PEFT（LoRA/QLoRA）・TRL（SFTTrainer）での教師あり追加学習を想定する。
+本リポジトリは、ネットに接続しづらい環境での利用を前提にした軽量LLM向けの追加学習実装をまとめたものである。
+荒天予測アプリ向けに、降水量をベースにした荒天リスクの学習データを用い、Hugging Face の Transformers・PEFT（LoRA / QLoRA）・TRL（SFTTrainer）で教師あり学習を行う。
+
+## 依存関係のメモ（クリーン環境向け）
+
+本節では、まっさらな作業環境からリポジトリを Clone したあとに、学習環境を再構築するための最小手順を記載する。
+
+> [!IMPORTANT]
+> 以前の混乱は、学習環境と GGUF 変換環境で `torch` / `transformers` / `bitsandbytes` の依存が衝突したことが原因である。
+> `llama.cpp` の変換用環境と学習用環境は分離し、`torch` は CUDA 版を明示してインストールすることが重要である。
+
+### 1. 学習用環境
+
+```bash
+source ~/miniforge3/etc/profile.d/conda.sh
+conda create -n weather-ft-cuda python=3.11 -y
+conda activate weather-ft-cuda
+
+python -m pip install --upgrade pip
+python -m pip install \
+  --index-url https://download.pytorch.org/whl/cu124 \
+  --extra-index-url https://pypi.org/simple \
+  torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 \
+  transformers==5.22.1 trl==1.17.1 peft==0.21.2 \
+  bitsandbytes==0.50.2 datasets==5.1.0 huggingface_hub==2.4.0 \
+  accelerate sentencepiece ninja
+```
+
+GPU が認識できているか確認する。
+
+```bash
+python - <<'PY'
+import torch
+print(torch.__version__)
+print(torch.version.cuda)
+print(torch.cuda.is_available())
+print(torch.cuda.device_count())
+print(torch.cuda.get_device_name(0))
+PY
+```
+
+実測の成功例:
+
+```text
+torch= 2.6.0+cu124
+cuda= 12.4
+cuda available= True
+device count= 2
+device name= NVIDIA GeForce RTX 4060 Ti
+```
+
+### 2. GGUF 変換用環境
+
+学習環境と変換環境は分離して管理する。`llama.cpp` で `transformers` を古いバージョンに落としてしまうと、Gemma 4 の tokenizer が壊れ、GGUF 変換に失敗する。
+
+```bash
+python3 -m venv ~/.venv-ggufconvert
+source ~/.venv-ggufconvert/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -U \
+  -r <path-to-llama.cpp>/requirements/requirements-convert_hf_to_gguf.txt \
+  "transformers==5.22.1"
+```
+
+`llama.cpp` そのものは別途 clone しておく。
+
+```bash
+git clone --depth 1 https://github.com/ggml-org/llama.cpp.git
+cd llama.cpp
+cmake -B build -DGGML_CUDA=OFF -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=OFF
+cmake --build build --target llama-quantize -j"$(nproc)"
+```
+
+### 3. 依存関係の原則
+
+- 学習用: `weather-ft-cuda` を使用する
+- GGUF 変換用: `~/.venv-ggufconvert` を使用する
+- `torch` は必ず CUDA 対応版（`+cu124`）を使う
+- `transformers` は Gemma 4 を扱うため `5.22.1` を固定する
+- `llama.cpp` の変換だけで環境を破壊しないよう、分離した仮想環境を設ける
+
+### 4. 実行例
+
+```bash
+source ~/miniforge3/etc/profile.d/conda.sh
+conda activate weather-ft-cuda
+cd /home/inoma/study/WeatherAI_FineTune
+export CUDA_VISIBLE_DEVICES=0
+python util/train_lora.py --low-vram
+```
+
+```bash
+source ~/.venv-ggufconvert/bin/activate
+cd /home/inoma/study/WeatherAI_FineTune
+python /path/to/llama.cpp/convert_hf_to_gguf.py outputs/gemma4-weather-merged --outtype f16 --outfile outputs/gemma4-weather-merged/model-f16.gguf
+```
+
+本リポジトリで実際に採用したバージョンセットは、上記の組み合わせを基準として固定している。
 
 ## 0. データの取得と整形
 
