@@ -215,3 +215,9 @@ systemロール非対応のテンプレートでは、system本文を先頭user�
 ```
 
 `--overwrite` は既存の生成データを上書きする。元のASOS CSVは変更しない。
+
+## ライセンス
+
+このリポジトリのコードは [Apache License 2.0](LICENSE) で提供する。
+元の観測データ（ASOS 1分値）は Iowa State University IEM が再配布するもので、
+本リポジトリには含めず、各自の取得・利用条件に従うこと。
