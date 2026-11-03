@@ -88,7 +88,7 @@ source ~/miniforge3/etc/profile.d/conda.sh
 conda activate weather-ft-cuda
 cd /home/inoma/study/WeatherAI_FineTune
 export CUDA_VISIBLE_DEVICES=0
-python util/train_lora.py --low-vram
+python src/train_lora.py --low-vram
 ```
 
 ```bash

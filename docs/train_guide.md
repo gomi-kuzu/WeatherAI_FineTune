@@ -215,7 +215,7 @@ export CUDA_VISIBLE_DEVICES=1
 
 ## 8. 学習スクリプトと実行手順
 
-学習スクリプト: [util/train_lora.py](../util/train_lora.py)（QLoRA, テキスト層のみに LoRA）
+学習スクリプト: [src/train_lora.py](../src/train_lora.py)（QLoRA, テキスト層のみに LoRA）
 
 ### 設計上のポイント（検証済み）
 
@@ -233,7 +233,7 @@ export CUDA_VISIBLE_DEVICES=1
 
 ```bash
 export CUDA_VISIBLE_DEVICES=<GPU番号>
-python util/train_lora.py --smoke
+python src/train_lora.py --smoke
 ```
 
 - `train` 64件 / `eval` 16件・10ステップのみ実行し、`outputs/smoke/` に保存。
@@ -257,8 +257,8 @@ VRAM 8GB クラスの GPU では `--low-vram` を付けると安全に収まる�
 
 ```bash
 export CUDA_VISIBLE_DEVICES=<GPU番号>
-python util/train_lora.py --low-vram            # 本番
-python util/train_lora.py --low-vram --smoke    # 配線確認
+python src/train_lora.py --low-vram            # 本番
+python src/train_lora.py --low-vram --smoke    # 配線確認
 ```
 
 - 内容: `batch_size=1`, `grad_accum=16`, `max_length=896`（実効バッチは維持）。
@@ -269,8 +269,8 @@ python util/train_lora.py --low-vram --smoke    # 配線確認
 
 ```bash
 export CUDA_VISIBLE_DEVICES=<GPU番号>
-python util/train_lora.py                        # 12GB クラス向け既定
-python util/train_lora.py --low-vram             # 8GB クラス向け
+python src/train_lora.py                        # 12GB クラス向け既定
+python src/train_lora.py --low-vram             # 8GB クラス向け
 ```
 
 - 既定の保存先は `outputs/gemma4-weather-qlora/`。
@@ -317,11 +317,11 @@ cd -
 
 ### ① LoRA をマージ（学習環境 weather-ft で）
 
-スクリプト: [util/merge_lora.py](../util/merge_lora.py)
+スクリプト: [src/merge_lora.py](../src/merge_lora.py)
 
 ```bash
 conda activate weather-ft
-python util/merge_lora.py \
+python src/merge_lora.py \
     --adapter outputs/gemma4-weather-qlora \
     --out outputs/gemma4-weather-merged
 ```

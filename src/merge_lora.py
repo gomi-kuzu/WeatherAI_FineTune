@@ -6,7 +6,7 @@ bf16 のベース `google/gemma-4-E2B-it` に統合し、GGUF 変換用の
 マージ済みチェックポイントを出力する。
 
 使い方:
-    python util/merge_lora.py \
+    python src/merge_lora.py \
         --adapter outputs/gemma4-weather-qlora \
         --out outputs/gemma4-weather-merged
 

@@ -7,10 +7,10 @@
 
 使い方:
     # スモークテスト（少量データで配線確認）
-    python util/train_lora.py --smoke
+    python src/train_lora.py --smoke
 
     # 本番学習
-    python util/train_lora.py
+    python src/train_lora.py
 
 GPU は環境変数 CUDA_VISIBLE_DEVICES で選択する（例: export CUDA_VISIBLE_DEVICES=1）。
 """
