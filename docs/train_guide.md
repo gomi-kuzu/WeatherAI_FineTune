@@ -227,16 +227,90 @@ python util/train_lora.py --low-vram             # 8GB クラス向け
 
 ---
 
-## 9. 次のステップ
+## 9. 学習後の GGUF 化（デプロイ向け・検証済み）
+
+デプロイ先は llama.cpp / Ollama 系（q4_0 GGUF）で実績があるため、学習後に
+同形式へ戻す。パイプライン全体をスモーク成果物で**事前検証済み**。
+
+```
+LoRA アダプタ → ① ベースにマージ → ② GGUF(f16)変換 → ③ q4_0 量子化 → デプロイ
+```
+
+> [!IMPORTANT]
+> **llama.cpp の変換依存は学習環境を破壊する**（`transformers` を古い版へ
+> ダウングレードし、gemma4 が読めなくなる）。変換は必ず**専用の venv に分離**する。
+> さらにその venv でも `transformers` を 5.22.1 に上げる必要がある
+> （古い版は gemma4 トークナイザの `extra_special_tokens`（list 型）を読めない）。
+
+### 事前準備（一度だけ）
+
+```bash
+# llama.cpp を取得
+git clone --depth 1 https://github.com/ggml-org/llama.cpp.git
+
+# 変換専用 venv（学習環境と分離）
+python3 -m venv ~/.venv-ggufconvert
+source ~/.venv-ggufconvert/bin/activate
+pip install -U pip
+pip install -r llama.cpp/requirements/requirements-convert_hf_to_gguf.txt
+pip install "transformers==5.22.1"   # gemma4 トークナイザ対応のため上書き
+deactivate
+
+# q4_0 量子化バイナリをビルド（CPU ビルドで十分、cmake 必要）
+cd llama.cpp
+cmake -B build -DGGML_CUDA=OFF -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=OFF
+cmake --build build --target llama-quantize -j"$(nproc)"
+cd -
+```
+
+### ① LoRA をマージ（学習環境 weather-ft で）
+
+スクリプト: [util/merge_lora.py](../util/merge_lora.py)
+
+```bash
+conda activate weather-ft
+python util/merge_lora.py \
+    --adapter outputs/gemma4-weather-qlora \
+    --out outputs/gemma4-weather-merged
+```
+
+- bf16 のまま CPU 上でマージ（量子化しない）。RAM 目安 20GB 以上。
+
+### ② GGUF(f16)へ変換（変換 venv で）
+
+```bash
+source ~/.venv-ggufconvert/bin/activate
+python llama.cpp/convert_hf_to_gguf.py \
+    outputs/gemma4-weather-merged \
+    --outtype f16 \
+    --outfile outputs/gemma4-weather-merged/model-f16.gguf
+```
+
+### ③ q4_0 量子化
+
+```bash
+./llama.cpp/build/bin/llama-quantize \
+    outputs/gemma4-weather-merged/model-f16.gguf \
+    outputs/gemma4-weather-merged/model-q4_0.gguf \
+    q4_0
+```
+
+- 実測: f16 約8.7GB → q4_0 **約3.2GB**（手元の配布版 q4_0 GGUF と同サイズ）。
+- 本タスクはテキストのみのため、画像/音声の mmproj は不要。
+
+---
+
+## 10. 次のステップ
 
 - [x] ライブラリの実インストールと GPU 認識の検証（完了）
 - [x] 学習用 HF 重み `google/gemma-4-E2B-it` の取得（完了）
 - [x] 4bit ロード・チャットテンプレート適用の検証（完了, VRAM 約6.7GB）
 - [x] 学習スクリプト（QLoRA, completion-only）の作成（完了）
 - [x] スモークテストでのパイプライン検証（完了）
+- [x] GGUF 化パイプラインの事前検証（マージ→f16→q4_0, 完了）
 - [ ] 本番学習の実行と `dev.jsonl` での検証
 - [ ] `test.jsonl` での評価、推論スクリプトの作成
-- [ ] 学習済み LoRA のマージと GGUF への変換（デプロイ向け）
+- [ ] 学習済みモデルのマージ・GGUF 化・デプロイ先での動作確認
 
 ---
 
