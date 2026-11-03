@@ -150,6 +150,15 @@ tokenizer.save_pretrained("outputs/weather-lora/final")
 - JSONを解析し、2項目の存在、`weather_risk` の整数型と0〜100の範囲を検査する。
 - testでJSON出力成功率、リスクのMAE、急変例の見逃しを評価する。
   「高リスク」の閾値はdevで決め、testでは変更しない。testやextraを学習に混ぜないこと。
+- 学習前の下限の目安として、教師ルール（気圧変動を主指標）の素の性能を
+  [util/eval_rule_baseline.py](util/eval_rule_baseline.py) で計測できる。
+  `.metadata.jsonl` から荒天・降水のAUCや気圧変動バンド別の荒天率を出す。
+  学習後のモデルがこの下限（test の荒天AUC 約0.75）を上回るかの比較に使う。
+
+  ```bash
+  .venv/bin/python util/eval_rule_baseline.py                 # 既定は test と dev
+  .venv/bin/python util/eval_rule_baseline.py --splits test   # split を指定
+  ```
 
 ### デプロイ時のプロンプト例
 
