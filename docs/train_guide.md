@@ -350,6 +350,32 @@ python llama.cpp/convert_hf_to_gguf.py \
 - 実測: f16 約8.7GB → q4_0 **約3.2GB**（手元の配布版 q4_0 GGUF と同サイズ）。
 - 本タスクはテキストのみのため、画像/音声の mmproj は不要。
 
+### ④ デプロイ前の動作確認（重要: thinking を無効化する）
+
+> [!IMPORTANT]
+> Gemma 4 の内蔵チャットテンプレートは **thinking（思考）チャンネルを既定で有効化**する。
+> 本タスクの学習データは thinking なしで **JSON を直接出力**する形式のため、
+> そのまま推論すると `Thinking Process:` などの思考文が混入して学習時とフォーマットが一致しない。
+> 推論時に `--reasoning off --reasoning-budget 0` を指定して thinking を無効化すること。
+
+```bash
+# 推論用 llama-cli をビルド（量子化バイナリとは別ターゲット）
+cd llama.cpp
+cmake --build build --target llama-cli -j"$(nproc)"
+cd -
+
+# デプロイ時の推奨コマンド（thinking 無効・greedy）
+./llama.cpp/build/bin/llama-cli \
+    -m outputs/gemma4-weather-merged/model-q4_0.gguf \
+    --jinja --reasoning off --reasoning-budget 0 \
+    -st --temp 0 --no-display-prompt \
+    -sys "<システムプロンプト>" \
+    -p "<観測 JSON>"
+```
+
+- 実測: q4_0 で `weather_risk` と reason が正解（gold）とほぼ一致。量子化誤差は reason 数値の微差程度。
+- 生成速度は CPU で約 29 t/s。エッジデバイスでも実用的。
+
 ---
 
 ## 10. 次のステップ
@@ -360,9 +386,10 @@ python llama.cpp/convert_hf_to_gguf.py \
 - [x] 学習スクリプト（QLoRA, completion-only）の作成（完了）
 - [x] スモークテストでのパイプライン検証（完了）
 - [x] GGUF 化パイプラインの事前検証（マージ→f16→q4_0, 完了）
-- [ ] 本番学習の実行と `dev.jsonl` での検証
-- [ ] `test.jsonl` での評価、推論スクリプトの作成
-- [ ] 学習済みモデルのマージ・GGUF 化・デプロイ先での動作確認
+- [x] 本番学習の実行（4060 Ti・約1時50分, 完了）
+- [x] `test.jsonl` での評価、推論スクリプトの作成（[util/eval_llm.py](../util/eval_llm.py), 完了）
+- [x] 学習済みモデルのマージ・GGUF 化・デプロイ先での動作確認（q4_0 で再現確認, 完了）
+- [ ] 予測値の mode collapse（greedy で 0/10/100 に偏る）の改善
 
 ---
 
