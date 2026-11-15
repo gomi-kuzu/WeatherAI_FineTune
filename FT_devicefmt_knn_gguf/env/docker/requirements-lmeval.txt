@@ -1,0 +1,4 @@
+# 補助指標（JCommonsenseQA / MMLU 抜き取り）用。torch を含むため任意ビルド
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1
+lm_eval==0.4.13

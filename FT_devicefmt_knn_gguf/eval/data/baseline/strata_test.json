@@ -1,0 +1,130 @@
+{
+ "split": "test",
+ "seed": 20261015,
+ "n_sample": 2500,
+ "n_dev_after_exclusion": 124687,
+ "n_train_after_exclusion": 543157,
+ "excluded_empty_bucket": {
+  "DSM": {
+   "test": 37,
+   "train": 129
+  },
+  "IAH": {
+   "test": 55,
+   "train": 66
+  },
+  "SEA": {
+   "test": 100,
+   "train": 215
+  },
+  "ATL": {
+   "test": 67,
+   "train": 137
+  },
+  "BOS": {
+   "test": 64,
+   "train": 182
+  }
+ },
+ "strata": {
+  "b0": {
+   "dev_rows": 93912,
+   "sampled": 800,
+   "w_strat": 117.39,
+   "by_station": {
+    "DSM": 157,
+    "IAH": 99,
+    "SEA": 236,
+    "ATL": 110,
+    "BOS": 198
+   }
+  },
+  "b1": {
+   "dev_rows": 18548,
+   "sampled": 600,
+   "w_strat": 30.913333333333334,
+   "by_station": {
+    "DSM": 114,
+    "IAH": 61,
+    "SEA": 205,
+    "ATL": 85,
+    "BOS": 135
+   }
+  },
+  "b2": {
+   "dev_rows": 7535,
+   "sampled": 500,
+   "w_strat": 15.07,
+   "by_station": {
+    "DSM": 81,
+    "IAH": 61,
+    "SEA": 153,
+    "ATL": 59,
+    "BOS": 146
+   }
+  },
+  "b3": {
+   "dev_rows": 2423,
+   "sampled": 350,
+   "w_strat": 6.922857142857143,
+   "by_station": {
+    "DSM": 70,
+    "IAH": 75,
+    "SEA": 28,
+    "ATL": 74,
+    "BOS": 103
+   }
+  },
+  "b4": {
+   "dev_rows": 2269,
+   "sampled": 250,
+   "w_strat": 9.076,
+   "by_station": {
+    "DSM": 49,
+    "IAH": 83,
+    "SEA": 0,
+    "ATL": 78,
+    "BOS": 40
+   }
+  }
+ },
+ "vendored_mismatch": 0,
+ "weighted_check": {
+  "DSM": {
+   "event_rate_sample_wpop_pct": 3.43,
+   "event_rate_split_weight_pct": 4.1,
+   "event_rate_summary_pct": 4.1,
+   "risk2_mean_sample_wpop": 0.914,
+   "risk2_mean_split_weight": 1.117
+  },
+  "IAH": {
+   "event_rate_sample_wpop_pct": 3.82,
+   "event_rate_split_weight_pct": 3.72,
+   "event_rate_summary_pct": 3.71,
+   "risk2_mean_sample_wpop": 1.414,
+   "risk2_mean_split_weight": 1.319
+  },
+  "SEA": {
+   "event_rate_sample_wpop_pct": 7.53,
+   "event_rate_split_weight_pct": 6.81,
+   "event_rate_summary_pct": 6.83,
+   "risk2_mean_sample_wpop": 0.984,
+   "risk2_mean_split_weight": 0.891
+  },
+  "ATL": {
+   "event_rate_sample_wpop_pct": 4.93,
+   "event_rate_split_weight_pct": 4.57,
+   "event_rate_summary_pct": 4.57,
+   "risk2_mean_sample_wpop": 1.601,
+   "risk2_mean_split_weight": 1.53
+  },
+  "BOS": {
+   "event_rate_sample_wpop_pct": 6.11,
+   "event_rate_split_weight_pct": 5.94,
+   "event_rate_summary_pct": 5.93,
+   "risk2_mean_sample_wpop": 1.34,
+   "risk2_mean_split_weight": 1.367
+  }
+ },
+ "prompt_chars_mean": 451.2096
+}

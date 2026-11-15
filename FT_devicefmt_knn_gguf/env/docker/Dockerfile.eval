@@ -1,0 +1,17 @@
+# ② gemma4-eval: 精度評価クライアント（amd64, Python）
+#   役割: 降水検知の評価データ作成 / プロンプト生成 / 採点 / 一覧表。
+#   ①③④ の llama-server に HTTP（OpenAI 互換 API）で同じ手順を流す。モデル本体は持たない。
+FROM docker.io/python:3.12-slim-bookworm AS base
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
+RUN apt-get update && apt-get install -y --no-install-recommends curl jq ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY requirements-eval.txt /tmp/requirements-eval.txt
+RUN pip install -r /tmp/requirements-eval.txt
+WORKDIR /work
+CMD ["sleep", "infinity"]
+
+# lm-eval-harness は torch 依存で巨大（数 GB）なので別ターゲットに分離する。
+# 使うとき: docker compose --profile lmeval build eval-lmeval
+FROM base AS lmeval
+COPY requirements-lmeval.txt /tmp/requirements-lmeval.txt
+RUN pip install -r /tmp/requirements-lmeval.txt

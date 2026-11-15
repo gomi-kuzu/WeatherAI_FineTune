@@ -1,0 +1,25 @@
+# ---- FT_devicefmt_knn_gguf 専用の .gitignore（親の .gitignore に加えて適用される）----
+
+# 親の `env/` はこのフォルダの env/docker（Dockerfile 群）に当たってしまうので解除する
+!env/
+
+# 大きな生成物は git に入れない（README「含めていないもの」の手順で再生成する）
+*.gguf
+*.gguf_file
+models/hf/
+models/ft/*/*
+!models/ft/*/train_log.json
+!models/ft/*/lora/
+models/ft/*/lora/*
+!models/ft/*/lora/adapter_config.json
+eval/data/raw/
+eval/results/kl/
+logs/*.log
+env/docker/.env
+
+# 親の *.csv / *.jsonl を、小さな集計・要約ファイルに限って解除する
+!eval/data/dataset_asos/dataset_summary.csv
+!eval/results/baseline/out_017/*.csv
+!eval/results/baseline/out_017_test/*.csv
+!docs/**/*.csv
+!bench/**/*.csv

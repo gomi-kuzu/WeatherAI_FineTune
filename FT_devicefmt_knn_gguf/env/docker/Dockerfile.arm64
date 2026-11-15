@@ -1,0 +1,64 @@
+# ③④ gemma4-arm64: 実機（Arduino UNO Q / QRB2210, Cortex-A53）と同一の aarch64 バイナリ
+#   このマシンでは QEMU（binfmt）で起動・疎通・RSS を測り、実機では同じイメージを pull して速度を測る。
+#   ビルドは amd64 上でクロスコンパイル（QEMU 上でコンパイルするより桁違いに速い）。
+#   命令セットは armv8-a 固定（A53 は dotprod / i8mm / fp16 演算を持たないため、それらを使う経路を一切含めない）。
+ARG LLAMA_CPP_TAG=v0.6.0
+ARG ARM_ARCH=armv8-a
+ARG ARM_CPU=cortex-a53
+
+FROM --platform=$BUILDPLATFORM docker.io/debian:bookworm AS build
+ARG LLAMA_CPP_TAG
+ARG ARM_ARCH
+ARG ARM_CPU
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential cmake git ca-certificates curl \
+      gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+RUN git clone --depth 1 --branch ${LLAMA_CPP_TAG} https://github.com/ggml-org/llama.cpp . \
+    && git rev-parse HEAD > /src/LLAMA_CPP_COMMIT
+# クロスコンパイル用ツールチェーン定義
+RUN printf '%s\n' \
+      'set(CMAKE_SYSTEM_NAME Linux)' \
+      'set(CMAKE_SYSTEM_PROCESSOR aarch64)' \
+      'set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)' \
+      'set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)' \
+      'set(CMAKE_FIND_ROOT_PATH /usr/aarch64-linux-gnu)' \
+      'set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)' \
+      'set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)' \
+      'set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)' \
+      > /src/toolchain-aarch64.cmake
+RUN cmake -B build \
+      -DCMAKE_TOOLCHAIN_FILE=/src/toolchain-aarch64.cmake \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DGGML_NATIVE=OFF -DGGML_CPU_ARM_ARCH=${ARM_ARCH} \
+      -DCMAKE_C_FLAGS="-mtune=${ARM_CPU}" -DCMAKE_CXX_FLAGS="-mtune=${ARM_CPU}" \
+      -DGGML_OPENMP=ON -DGGML_CPU_KLEIDIAI=OFF \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DLLAMA_OPENSSL=OFF -DLLAMA_CURL=OFF \
+      -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF \
+      -DLLAMA_USE_PREBUILT_UI=ON \
+    && cmake --build build --config Release -j"$(nproc)" \
+      --target llama-server llama-cli llama-completion llama-bench llama-tokenize llama-perplexity llama-quantize llama-imatrix \
+    && mkdir -p /app/bin \
+    && cp build/bin/llama-server build/bin/llama-cli build/bin/llama-completion build/bin/llama-bench \
+          build/bin/llama-tokenize build/bin/llama-perplexity build/bin/llama-quantize build/bin/llama-imatrix /app/bin/ \
+    && cp /src/LLAMA_CPP_COMMIT /app/ \
+    && aarch64-linux-gnu-strip /app/bin/* \
+    && file /app/bin/llama-server || true
+
+FROM --platform=linux/arm64 docker.io/debian:bookworm-slim
+ARG LLAMA_CPP_TAG
+ARG ARM_ARCH
+LABEL org.opencontainers.image.title="gemma4-arm64" \
+      org.opencontainers.image.description="llama.cpp ${LLAMA_CPP_TAG} aarch64 (${ARM_ARCH}, Cortex-A53 向け) 実機配布用" \
+      llama.cpp.tag="${LLAMA_CPP_TAG}" llama.cpp.arm_arch="${ARM_ARCH}"
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libgomp1 libstdc++6 curl ca-certificates procps \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /app /app
+ENV PATH=/app/bin:$PATH \
+    LLAMA_ARG_HOST=0.0.0.0 \
+    LLAMA_CPP_TAG=${LLAMA_CPP_TAG}
+WORKDIR /work
+CMD ["sleep", "infinity"]

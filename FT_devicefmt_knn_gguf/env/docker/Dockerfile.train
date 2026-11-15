@@ -1,0 +1,22 @@
+# ⑤ gemma4-train: LoRA FineTune 用（amd64 + CUDA 12.8, T4 向け）。提案書 016 §4-2
+#   役割: unsloth/gemma-4-E2B-it の LoRA 学習 → マージ → F16 GGUF 変換（llama.cpp の convert_hf_to_gguf.py）
+#   モデル本体は持たない（models/hf/ をマウント）。学習データは eval/data/sft/ をマウント。
+ARG CUDA_VERSION=12.8.1
+ARG UBUNTU_VERSION=24.04
+FROM docker.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
+ARG LLAMA_CPP_TAG=v0.6.0
+ENV DEBIAN_FRONTEND=noninteractive PIP_NO_CACHE_DIR=1 PYTHONUNBUFFERED=1
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3 python3-venv python3-pip python3-dev git ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+RUN python3 -m venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH
+COPY requirements-train.txt /tmp/requirements-train.txt
+RUN pip install -r /tmp/requirements-train.txt
+# GGUF 変換スクリプト（llama.cpp のタグを ①③ と揃える）
+RUN git clone --depth 1 --branch ${LLAMA_CPP_TAG} https://github.com/ggml-org/llama.cpp /opt/llama.cpp \
+    && pip install /opt/llama.cpp/gguf-py \
+    && git -C /opt/llama.cpp rev-parse HEAD > /opt/llama.cpp/COMMIT
+ENV LLAMA_CPP_DIR=/opt/llama.cpp HF_HUB_OFFLINE=1 HF_HOME=/tmp/hf
+WORKDIR /work
+CMD ["sleep", "infinity"]

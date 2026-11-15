@@ -1,0 +1,153 @@
+# Gemma 4 × QRB2210 検証環境（提案書 revB §4）
+# ホスト OS で実行するのは `docker compose`（と binfmt 登録）だけ。llama.cpp / Python はホストに入れない。
+# 使い方は env/docker/run.sh を参照（binfmt 登録→build→up→smoke を一括で行う）。
+name: gemma4
+
+# このマシンは HTTP プロキシ経由でしか外に出られない。ビルド時（apt / git / pip）と
+# 外部取得が要るコンテナ（② の気象庁データ取得）にホストのプロキシ設定を渡す。
+# コンテナ間通信（quant / arm64 / 実機）はプロキシを通さないよう NO_PROXY に含める。
+x-proxy-args: &proxy-args
+  HTTP_PROXY: ${HTTP_PROXY:-}
+  HTTPS_PROXY: ${HTTPS_PROXY:-}
+  NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1},quant,arm64,eval,unoq.local
+  http_proxy: ${HTTP_PROXY:-}
+  https_proxy: ${HTTPS_PROXY:-}
+  no_proxy: ${NO_PROXY:-localhost,127.0.0.1},quant,arm64,eval,unoq.local
+
+x-common-volumes: &common-volumes
+  - ../../models:/work/models          # GGUF（BF16 参照・量子化・imatrix・MTP）
+  - ../../eval:/work/eval              # 評価データ・プロンプト・GBNF・採点結果
+  - ../../bench:/work/bench            # llama-bench 設定・結果・予測モデル
+  - ../../logs:/work/logs              # 学習ログ
+  # プロキシ（Zscaler）が TLS を中継するため、ホストの CA 束をコンテナにも見せる
+  - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/host-ca-bundle.crt:ro
+
+# 成果物が root 所有にならないよう、ホストのユーザーで実行する（env/docker/.env の DOCKER_UID/GID）
+x-user: &user "${DOCKER_UID:-1000}:${DOCKER_GID:-1000}"
+x-ca-env: &ca-env
+  SSL_CERT_FILE: /etc/ssl/certs/host-ca-bundle.crt
+  REQUESTS_CA_BUNDLE: /etc/ssl/certs/host-ca-bundle.crt
+  CURL_CA_BUNDLE: /etc/ssl/certs/host-ca-bundle.crt
+  HOME: /tmp
+
+services:
+  # ① 量子化と参照推論の工場（amd64 + CUDA / T4）
+  quant:
+    build:
+      context: .
+      dockerfile: Dockerfile.quant
+      args:
+        <<: *proxy-args
+        LLAMA_CPP_TAG: v0.6.0
+        CUDA_DOCKER_ARCH: "75"
+    image: gemma4-quant:v0.6.0
+    container_name: gemma4-quant
+    hostname: quant
+    user: *user
+    gpus: all
+    volumes: *common-volumes
+    working_dir: /work
+    ports:
+      - "127.0.0.1:8081:8080"          # llama-server（OpenAI 互換 API）
+    environment:
+      <<: *ca-env
+      LLAMA_ARG_HOST: 0.0.0.0
+      LLAMA_ARG_PORT: "8080"
+    # 既定はアイドル。推論サーバーは `run.sh server-quant <gguf>` で起動する
+    command: ["sleep", "infinity"]
+    networks: [gemma4]
+
+  # ② 精度評価クライアント（amd64, Python）
+  eval:
+    build:
+      context: .
+      dockerfile: Dockerfile.eval
+      target: base
+      args: *proxy-args
+    image: gemma4-eval:latest
+    container_name: gemma4-eval
+    hostname: eval
+    user: *user
+    volumes: *common-volumes
+    working_dir: /work
+    environment:
+      <<: [*proxy-args, *ca-env]
+      # 接続先 URL を環境変数で切り替える（① quant / ③ arm64 / ④ 実機 LAN）
+      LLAMA_URL_QUANT: http://quant:8080
+      LLAMA_URL_ARM64: http://arm64:8080
+      LLAMA_URL_DEVICE: ${LLAMA_URL_DEVICE:-http://unoq.local:8080}
+    command: ["sleep", "infinity"]
+    networks: [gemma4]
+
+  # ②' lm-eval-harness 入り（torch 含む・巨大）。必要なときだけ --profile lmeval
+  eval-lmeval:
+    build:
+      context: .
+      dockerfile: Dockerfile.eval
+      target: lmeval
+      args: *proxy-args
+    image: gemma4-eval:lmeval
+    container_name: gemma4-eval-lmeval
+    profiles: [lmeval]
+    user: *user
+    volumes: *common-volumes
+    working_dir: /work
+    environment:
+      <<: [*proxy-args, *ca-env]
+    command: ["sleep", "infinity"]
+    networks: [gemma4]
+
+  # ③ 実機同一バイナリの検証場（linux/arm64, QEMU）。④ 実機でも同じイメージを使う
+  arm64:
+    build:
+      context: .
+      dockerfile: Dockerfile.arm64
+      platforms: [linux/arm64]
+      args:
+        <<: *proxy-args
+        LLAMA_CPP_TAG: v0.6.0
+        ARM_ARCH: armv8-a
+        ARM_CPU: cortex-a53
+    image: gemma4-arm64:v0.6.0
+    platform: linux/arm64
+    container_name: gemma4-arm64
+    hostname: arm64
+    user: *user
+    volumes: *common-volumes
+    working_dir: /work
+    ports:
+      - "127.0.0.1:8083:8080"
+    environment:
+      <<: *ca-env
+      LLAMA_ARG_HOST: 0.0.0.0
+      LLAMA_ARG_PORT: "8080"
+    # 実機のメモリ条件（4GB 版、OS 起動後の空き約 2.9GB）に寄せた上限。RSS 実測時の OOM 検知にも使う
+    mem_limit: 2900m
+    cpus: 4
+    command: ["sleep", "infinity"]
+    networks: [gemma4]
+
+  # ⑤ LoRA FineTune（amd64 + CUDA / T4）。提案書 016。既定はアイドル
+  train:
+    build:
+      context: .
+      dockerfile: Dockerfile.train
+      args:
+        <<: *proxy-args
+        LLAMA_CPP_TAG: v0.6.0
+    image: gemma4-train:latest
+    container_name: gemma4-train
+    hostname: train
+    user: *user
+    gpus: all
+    volumes: *common-volumes
+    working_dir: /work
+    shm_size: "8g"
+    environment:
+      <<: [*proxy-args, *ca-env]
+    command: ["sleep", "infinity"]
+    networks: [gemma4]
+
+networks:
+  gemma4:
+    name: gemma4
