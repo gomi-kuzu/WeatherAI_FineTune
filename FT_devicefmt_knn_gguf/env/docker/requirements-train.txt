@@ -1,0 +1,16 @@
+# ⑤ 学習コンテナの依存（2026-10-15 時点の最新。Gemma 4 は transformers >= 5.5 が必要。unsloth 2026.10.5 の上限が <=5.17.0）
+torch==2.14.1
+transformers==5.17.0
+peft==0.21.2
+trl==1.15.0
+accelerate
+bitsandbytes==0.50.2
+unsloth==2026.10.5
+unsloth_zoo
+datasets
+sentencepiece
+protobuf
+safetensors
+numpy
+pandas
+scikit-learn

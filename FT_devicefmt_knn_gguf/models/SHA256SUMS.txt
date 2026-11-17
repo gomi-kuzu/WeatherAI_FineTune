@@ -1,0 +1,4 @@
+1eafd61d010ce8ca09db38f370aadd64c6d792db269c365ad0d9ea2709701890  gemma-4-E2B-it-BF16.gguf
+b52f438017efaec5debf1c0d8be690571e212a07c312f1102bbce927258cfc32  gemma-4-E2B-it-UD-Q4_K_XL.gguf
+9eba819938efccfd6044f8af84e3bbfddc639a2bcf32ebc36420e6a649191919  mtp-gemma-4-E2B-it.gguf
+1828d3cc1674eaa32201917412cd0a8ec7a523c721547ae036689a2807ee2af4  imatrix_unsloth.gguf_file

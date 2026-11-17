@@ -1,0 +1,38 @@
+{
+ "n": 500,
+ "all_agree": 0.476,
+ "row_std_mean": 0.39707726601655496,
+ "range_mean": 0.712,
+ "agree_temp0": 0.6886666666666666,
+ "per_seed": {
+  "0": {
+   "auc_event_w": 0.826,
+   "rho_all": 0.593,
+   "mae_w": 2.634,
+   "pred_mean": 4.898
+  },
+  "1": {
+   "auc_event_w": 0.832,
+   "rho_all": 0.593,
+   "mae_w": 2.616,
+   "pred_mean": 4.876
+  },
+  "2": {
+   "auc_event_w": 0.836,
+   "rho_all": 0.603,
+   "mae_w": 2.616,
+   "pred_mean": 4.858
+  }
+ },
+ "sd": {
+  "auc_event_w": 0.0043,
+  "rho_all": 0.0044,
+  "mae_w": 0.0084
+ },
+ "temp0_same_rows": {
+  "auc_event_w": 0.835,
+  "rho_all": 0.599,
+  "mae_w": 2.593,
+  "pred_mean": 4.848
+ }
+}

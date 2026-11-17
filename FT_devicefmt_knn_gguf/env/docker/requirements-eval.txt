@@ -1,0 +1,10 @@
+# ② 評価クライアントの依存（版固定。Phase 0 で確定）
+numpy==2.2.6
+pandas==2.3.3
+scikit-learn==1.7.2
+requests==2.34.2
+pyyaml==6.0.3
+jinja2==3.1.6
+tqdm==4.70.1
+matplotlib==3.10.9
+gguf==0.19.0
